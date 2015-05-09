@@ -13,5 +13,6 @@
     "express": "^4.12.3",
     "mongo": "^0.1.0",
     "mongoose": "^4.0.2"
-  }
+  },
+  "scripts": {"start": "mongod&node app.js&node Climate.js"}
 }
