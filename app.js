@@ -4,6 +4,7 @@ var mongoose = require('mongoose');
 var wdb = mongoose.createConnection('mongodb://localhost/weather');
 var odb = mongoose.createConnection('mongodb://localhost/moving_object');
 var app = express();
+var port = 3000
 
 var weather = wdb.model('weather', {
     Type: Number,
@@ -43,7 +44,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.post('/weather', function(req, res) {
     //console.log(req.url);
-    console.log(req.body.cnt);
+    //console.log(req.body.cnt);
     var Wea = new weather({
         Type: req.body.data.Type,
         Month: req.body.data.Month,
@@ -68,14 +69,17 @@ app.post('/weather', function(req, res) {
 
     Wea.save(function(err) {
         if (err)
-            console.log('error');
-        else console.log("weather success")
+            console.log('database error');
+        //else console.log("weather success")
     });
 
     res.send("Success");
 });
 
+var recieve_cnt = 0
+var save_cnt = 0
 app.post('/moving_object', function(req, res) {
+	//console.log('recieve_cnt:'+(++recieve_cnt))
     //console.log(req.url);
     var MovOb = new moving_object({
         Source: req.body.Source,
@@ -90,11 +94,12 @@ app.post('/moving_object', function(req, res) {
 
     MovOb.save(function(err) {
         if (err)
-            console.log('error');
-        else console.log("moving_object success")
+            console.log('database error');
+        //else console.log("moving_object success")
+        //else console.log('save_cnt:'+(++save_cnt))
     });
 
     res.send("Success");
 });
 
-app.listen(3000);
+app.listen(port);
