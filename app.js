@@ -42,6 +42,9 @@ var moving_object = odb.model('moving_object', {
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+var recieve_cnt = 0
+var save_cnt = 0
 app.post('/weather', function(req, res) {
     //console.log(req.url);
     //console.log(req.body.cnt);
@@ -71,13 +74,13 @@ app.post('/weather', function(req, res) {
         if (err)
             console.log('database error');
         //else console.log("weather success")
+        else console.log('save_cnt1:'+(++save_cnt))
     });
 
     res.send("Success");
 });
 
-var recieve_cnt = 0
-var save_cnt = 0
+
 app.post('/moving_object', function(req, res) {
 	//console.log('recieve_cnt:'+(++recieve_cnt))
     //console.log(req.url);
@@ -96,7 +99,7 @@ app.post('/moving_object', function(req, res) {
         if (err)
             console.log('database error');
         //else console.log("moving_object success")
-        //else console.log('save_cnt:'+(++save_cnt))
+        else console.log('save_cnt:'+(++save_cnt))
     });
 
     res.send("Success");

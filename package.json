@@ -14,5 +14,5 @@
     "mongo": "^0.1.0",
     "mongoose": "^4.0.2"
   },
-  "scripts": {"start": ""}
+  "scripts": {"start": "start /b node Climate.js&start /b node client.js&start /b node moving_object.js&node app.js"}
 }
