@@ -32,7 +32,7 @@ function call(){
     	console.log('sent:'+cnt);
 	});
 	req.on('error', function(error) {
-		console.log('error:' + error);
+		console.log(error);
 	});
 	req.end();
 }

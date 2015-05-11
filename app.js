@@ -7,37 +7,37 @@ var app = express();
 var port = 3000
 
 var weather = wdb.model('weather', {
-    Type: Number,
-    Month: Number,
-    Day: String,
-    Hour: String,
-    Min: String,
-    Sec: String,
-    Lat: String,
-    Long: String,
-    WindDirection: String,
-    WindSpeed: String,
-    AprsSoft: String,
-    WeatherUnit: String,
-    Gust: String,
-    Temp: String,
-    RainLastHr: String,
-    RainLast24Hr: String,
-    RainSinceMid: String,
-    Humidity: String,
-    Barometric: String
+	Type: Number,
+	Month: Number,
+	Day: String,
+	Hour: String,
+	Min: String,
+	Sec: String,
+	Lat: String,
+	Long: String,
+	WindDirection: String,
+	WindSpeed: String,
+	AprsSoft: String,
+	WeatherUnit: String,
+	Gust: String,
+	Temp: String,
+	RainLastHr: String,
+	RainLast24Hr: String,
+	RainSinceMid: String,
+	Humidity: String,
+	Barometric: String
 });
 
 var moving_object = odb.model('moving_object', {
-    Source: String,
-    Latitude: Number,
-    Longitude: Number,
-    Name: String,
-    Time: Date,
-    Speed: Number,
-    Course: Number,
-    Altitude: Number,
-    Comment: String
+	Source: String,
+	Latitude: Number,
+	Longitude: Number,
+	Name: String,
+	Time: Date,
+	Speed: Number,
+	Course: Number,
+	Altitude: Number,
+	Comment: String
 });
 
 app.use(bodyParser.json());
@@ -46,64 +46,72 @@ app.use(bodyParser.urlencoded({ extended: true }));
 var w_save_cnt = 0
 var o_save_cnt = 0
 app.post('/weather', function(req, res) {
-    //console.log(req.url);
-    //console.log(req.body.cnt);
-    var Wea = new weather({
-        Type: req.body.data.Type,
-        Month: req.body.data.Month,
-        Day: req.body.data.Day,
-        Hour: req.body.data.Hour,
-        Min: req.body.data.Min,
-        Sec: req.body.data.Sec,
-        Lat: req.body.data.Lat,
-        Long: req.body.data.Long,
-        WindDirection: req.body.data.WindDirection,
-        WindSpeed: req.body.data.WindSpeed,
-        AprsSoft: req.body.data.AprsSoft,
-        WeatherUnit: req.body.data.WeatherUnit,
-        Gust: req.body.data.Gust,
-        Temp: req.body.data.Temp,
-        RainLastHr: req.body.data.RainLastHr,
-        RainLast24Hr: req.body.data.RainLast24Hr,
-        RainSinceMid: req.body.data.RainSinceMid,
-        Humidity: req.body.data.Humidity,
-        Barometric: req.body.data.Barometric
-    });
+	//console.log(req.url);
+	//console.log(req.body.cnt);
+	var Wea = new weather({
+		Type: req.body.data.Type,
+		Month: req.body.data.Month,
+		Day: req.body.data.Day,
+		Hour: req.body.data.Hour,
+		Min: req.body.data.Min,
+		Sec: req.body.data.Sec,
+		Lat: req.body.data.Lat,
+		Long: req.body.data.Long,
+		WindDirection: req.body.data.WindDirection,
+		WindSpeed: req.body.data.WindSpeed,
+		AprsSoft: req.body.data.AprsSoft,
+		WeatherUnit: req.body.data.WeatherUnit,
+		Gust: req.body.data.Gust,
+		Temp: req.body.data.Temp,
+		RainLastHr: req.body.data.RainLastHr,
+		RainLast24Hr: req.body.data.RainLast24Hr,
+		RainSinceMid: req.body.data.RainSinceMid,
+		Humidity: req.body.data.Humidity,
+		Barometric: req.body.data.Barometric
+	});
 
-    Wea.save(function(err) {
-        if (err)
-            console.log('database error');
-        //else console.log("weather success")
-        else console.log('weather_save_cnt:'+(++w_save_cnt))
-    });
+	Wea.save(function(err) {
+		if (err)
+			console.log('database error');
+		//else console.log("weather success")
+		else console.log('weather_save_cnt:'+(++w_save_cnt))
+	});
 
-    res.send("Success");
+	res.send("Success");
 });
 
 
 app.post('/moving_object', function(req, res) {
 	//console.log('recieve_cnt:'+(++recieve_cnt))
-    //console.log(req.url);
-    var MovOb = new moving_object({
-        Source: req.body.Source,
-        Latitude: req.body.Latitude,
-        Longitude: req.body.Longitude,
-        Name: req.body.Name,
-        Time: req.body.Time,
-        Speed: req.body.Speed,
-        Course: req.body.Course,
-        Altitude: req.body.Altitude,
-        Comment: req.body.Comment
-    });
+	//console.log(req.url);
+	var MovOb = new moving_object({
+		Source: req.body.Source,
+		Latitude: req.body.Latitude,
+		Longitude: req.body.Longitude,
+		Name: req.body.Name,
+		Time: req.body.Time,
+		Speed: req.body.Speed,
+		Course: req.body.Course,
+		Altitude: req.body.Altitude,
+		Comment: req.body.Comment
+	});
 
-    MovOb.save(function(err) {
-        if (err)
-            console.log('database error');
-        //else console.log("moving_object success")
-        else console.log('object_save_cnt:'+(++o_save_cnt))
-    });
+	MovOb.save(function(err) {
+		if (err)
+			console.log('database error');
+		//else console.log("moving_object success")
+		else console.log('object_save_cnt:'+(++o_save_cnt))
+	});
 
-    res.send("Success");
+	res.send("Success");
 });
 
 app.listen(port);
+
+wdb.on('error', function(error) {
+	console.log(error);
+});
+
+odb.on('error', function(error) {
+	console.log(error);
+});
