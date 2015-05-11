@@ -31,7 +31,7 @@ var weather = wdb.model('weather', {
 var moving_object = odb.model('moving_object', {
     Source: String,
     Latitude: Number,
-    Longtitude: Number,
+    Longitude: Number,
     Name: String,
     Time: Date,
     Speed: Number,
@@ -43,8 +43,8 @@ var moving_object = odb.model('moving_object', {
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-var recieve_cnt = 0
-var save_cnt = 0
+var w_save_cnt = 0
+var o_save_cnt = 0
 app.post('/weather', function(req, res) {
     //console.log(req.url);
     //console.log(req.body.cnt);
@@ -74,7 +74,7 @@ app.post('/weather', function(req, res) {
         if (err)
             console.log('database error');
         //else console.log("weather success")
-        else console.log('save_cnt1:'+(++save_cnt))
+        else console.log('weather_save_cnt:'+(++w_save_cnt))
     });
 
     res.send("Success");
@@ -87,8 +87,9 @@ app.post('/moving_object', function(req, res) {
     var MovOb = new moving_object({
         Source: req.body.Source,
         Latitude: req.body.Latitude,
-        Longtitude: req.body.Longtitude,
+        Longitude: req.body.Longitude,
         Name: req.body.Name,
+        Time: req.body.Time,
         Speed: req.body.Speed,
         Course: req.body.Course,
         Altitude: req.body.Altitude,
@@ -99,7 +100,7 @@ app.post('/moving_object', function(req, res) {
         if (err)
             console.log('database error');
         //else console.log("moving_object success")
-        else console.log('save_cnt:'+(++save_cnt))
+        else console.log('object_save_cnt:'+(++o_save_cnt))
     });
 
     res.send("Success");

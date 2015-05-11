@@ -1,6 +1,6 @@
 var http = require('http')
 var cnt = 0
-var sent_interval = 9
+var send_interval = 3
 
 function call(){
 	cnt++;
@@ -37,4 +37,4 @@ function call(){
 	req.end();
 }
 
-setInterval(call,sent_interval)
+setInterval(call,send_interval)
