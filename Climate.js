@@ -1,5 +1,6 @@
 var net = require('net');
 var http = require('http');
+var fs = require('fs');
 
 var port = 14580;
 var host = 'hangzhou.aprs2.net';
@@ -8,8 +9,11 @@ var filter = '#filter t/w\n';
 
 var client = new net.Socket();
 
-var count = 0; //debugging
-var errCount = 0;
+var countReceived = 0;
+var errCountParse = 0;
+
+var countPost = 0;
+var errCountPost = 0;
 
 client.connect(port, host, function() {
   client.write(user);
@@ -17,49 +21,64 @@ client.connect(port, host, function() {
 });
 
 client.on('data', function(data) {
-  //console.log('Data');
-  //console.log(data.toString());
-  //var DataOnetime=new Array();
-  //DataOnetime = data.toString().split('\n');
+
   var dataReceived = data.toString().split('\n')
-  //console.log(data.toString());
-
   for (var i = 0; i < dataReceived.length; i++) {
+    if (dataReceived[i] == '') {
+      continue;
+    }
 
-    // console.log("@@@@@@@@@@@@@@@@@");
-    //console.log(dataSplit(dataReceived[i]));
-    var dataToBePosted = dataSplit(dataReceived[i]);
-    //postData(dataSplit(dataReceived[i]));
-    if (dataToBePosted != undefined)
-      postData(dataToBePosted);
+    var countString = parseInt(countReceived++) + ': ';
+    fs.appendFile('./Received.log', countString + dataReceived[i] + '\n', 'utf-8', function(err) {
+      if (err)
+        console.log('write File err: ' + err);
+    })
 
+    try {
+      var dataToBePosted = dataSplit(dataReceived[i]);
+      if (dataToBePosted != undefined) {
+        //write parsedData to log
+        fs.appendFile('./parsed.log', countString + JSON.stringify(dataToBePosted) + '\n', 'utf-8', function(err) {
+          if (err) {
+            console.log(err);
+          }
+        });
+        //post Data
+
+        postData(dataToBePosted);
+
+      }
+    } catch (err) {
+      console.log('err occured');
+      console.log(err);
+      //write to error log
+      var errCountString = parseInt(++errCountParse) + ': ';
+      fs.appendFile('./Error.log', errCountString + dataReceived[i] + '\n', 'utf-8', function(err) {
+        if (err)
+          console.log(err);
+      });
+
+    }
   }
-  /*
-		for (i=0;i<DataOnetime.length;i++){
-			//console.log(i+DataOnetime[i]);
-			//dealwithData
-			postData(DataOnetime[i]);	//post data to backend (One string per time)
-		}
-        */
+
 });
 
 function postData(dataToPost) {
   //console.log(dataToPost);
   var dataString = JSON.stringify({
     data: dataToPost,
-    cnt: ++count
+    cnt: ++countPost
   });
   //console.log(dataString);
   var opts = {
     host: "localhost",
     port: 3000,
-    path: '/weather',
+    path: '/testingPost',
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Content-Length': dataString.length
-    }//，
-    //keepAlive: true
+    }
   };
 
   var req = http.request(opts, function(feedback) {
@@ -68,7 +87,7 @@ function postData(dataToPost) {
 
   req.on('error', function(err) {
     console.log('problem with request:' + err);
-    console.log(++errCount + "/" + count);
+    console.log(++errCountPost + "/" + countPost);
   });
 
   req.write(dataString, function(feedback) {
@@ -78,26 +97,13 @@ function postData(dataToPost) {
 
 }
 
-client.on('error', function(error) {
-  console.log('error' + error);
-  //client.destory();
-});
-
-client.on('close', function() {
-  console.log('Closed.\n');
-  client.end();
-});
-
-client.on('end', function() {
-  console.log('disconnected\n');
-});
-
-function dataSplit(data) {
-  //console.log("++"+data);
+function dataSplit(data) { //console.log("++"+data);
   if (data.charAt(0) != '#' && data.charAt(0) != '') {
 
+    var positionOfFlag = data.indexOf(':');
+
     if (data != '') {
-      if (data.indexOf(':') == -1) {
+      if (positionOfFlag == -1) {
         throw new Error("Error");
       }
     } else {
@@ -105,7 +111,9 @@ function dataSplit(data) {
     }
 
 
-    var dataStr = data.split(/:/);
+    var dataStr = new Array;
+    dataStr[0] = data.substring(0, positionOfFlag);
+    dataStr[1] = data.substring(positionOfFlag + 1);
     //     console.log(dataStr);
     //     dataStr[1] = dataStr[1].toString().substring(0, dataStr[1].length-1);
     // console.log(typeof(dataStr[1]));
@@ -145,7 +153,7 @@ function dataSplit(data) {
           windInfo = dataStr[1].substring(27, 34);
           compressedWindInfo = '';
           WeatherData = dataStr[1].substring(34, dataStr[1].length);
-          newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
+          //  newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
 
         } else {
           //Complete Weather data with Compressed Lat/Long and Time Stamp
@@ -155,14 +163,18 @@ function dataSplit(data) {
           compressedWindInfo = dataStr[1].substring(18, 20);
           windInfo = '';
           WeatherData = dataStr[1].substring(21, dataStr[1].length);
-          newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
+          // newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
         }
-        /*
-            console.log(time);
-            console.log(latitute);
-            console.log(longitude);
-            console.log(windInfo);
-            console.log(newWeatherData);*/
+
+        var s = WeatherData.search(/[csgtrPphbLl]\d{2,5}[^csgtrPphbLl]/);
+        //console.log("@@@@@@#######$$$$$%%%%%" + s + "!!!!!!@@@@@########")
+
+        dealWithSoftIdentifier(WeatherData);
+
+        var newObj = dealWithSoftIdentifier(WeatherData);
+        WeatherData = newObj.weather;
+        MachineIdentifier = newObj.machine;
+
         break;
 
       case '/':
@@ -176,7 +188,7 @@ function dataSplit(data) {
           windInfo = dataStr[1].substring(27, 34);
           compressedWindInfo = '';
           WeatherData = dataStr[1].substring(34, dataStr[1].length);
-          newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
+          // newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
 
         } else {
           //Complete Weather data with Compressed Lat/Long and Time Stamp
@@ -186,14 +198,19 @@ function dataSplit(data) {
           compressedWindInfo = dataStr[1].substring(18, 20);
           windInfo = '';
           WeatherData = dataStr[1].substring(21, dataStr[1].length);
-          newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
+          // newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
         }
 
-        /*  console.log(time);
-          console.log(latitute);
-          console.log(longitude);
-          console.log(windInfo);
-          console.log(newWeatherData);*/
+        var s = WeatherData.search(/[csgtrPphbLl]\d{2,5}[^csgtrPphbLl]/);
+        //console.log("@@@@@@#######$$$$$%%%%%" + s + "!!!!!!@@@@@########")
+
+
+        dealWithSoftIdentifier(WeatherData);
+        var newObj = dealWithSoftIdentifier(WeatherData);
+        WeatherData = newObj.weather;
+        MachineIdentifier = newObj.machine;
+
+
         break;
 
       case '!':
@@ -210,7 +227,7 @@ function dataSplit(data) {
             windInfo = dataStr[1].substring(21, 28);
             compressedWindInfo = '';
             WeatherData = dataStr[1].substring(28, dataStr[1].length);
-            var newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
+            //  var newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
 
           } else {
             //Complete Weather data with Compressed Lat/Long and NO Time Stamp
@@ -221,15 +238,20 @@ function dataSplit(data) {
             compressedWindInfo = dataStr[1].substring(11, 13);
             windInfo = '';
             WeatherData = dataStr[1].substring(14, dataStr[1].length);
-            newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
+            //   newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
 
           }
 
-          /*    console.log(time);
-              console.log(latitute);
-              console.log(longitude);
-              console.log(windInfo);
-              console.log(newWeatherData);*/
+          var s = WeatherData.search(/[csgtrPphbLl]\d{2,5}[^csgtrPphbLl]/);
+          //console.log("@@@@@@#######$$$$$%%%%%" + s + "!!!!!!@@@@@########")
+
+
+          dealWithSoftIdentifier(WeatherData);
+          var newObj = dealWithSoftIdentifier(WeatherData);
+          WeatherData = newObj.weather;
+          MachineIdentifier = newObj.machine;
+
+
         } else {
           var rawWeatherData = dataStr[1].substring(1, dataStr[1].length);
         }
@@ -247,7 +269,7 @@ function dataSplit(data) {
           windInfo = dataStr[1].substring(20, 27);
           compressedWindInfo = '';
           WeatherData = dataStr[1].substring(27, dataStr[1].length);
-          newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
+          // newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
 
 
         } else {
@@ -259,14 +281,15 @@ function dataSplit(data) {
           compressedWindInfo = dataStr[1].substring(11, 13);
           windInfo = '';
           WeatherData = dataStr[1].substring(14, dataStr[1].length);
-          newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
+          // newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
         }
 
-        /*   console.log(time);
-           console.log(latitute);
-           console.log(longitude);
-           console.log(windInfo);
-           console.log(newWeatherData);*/
+        var s = WeatherData.search(/[csgtrPphbLl]\d{2,5}\[^csgtrPphbLl]/);
+        //console.log("@@@@@@#######$$$$$%%%%%" + s + "!!!!!!@@@@@########")
+        dealWithSoftIdentifier(WeatherData);
+        var newObj = dealWithSoftIdentifier(WeatherData);
+        WeatherData = newObj.weather;
+        MachineIdentifier = newObj.machine;
 
         break;
 
@@ -281,7 +304,8 @@ function dataSplit(data) {
           windInfo = dataStr[1].substring(37, 44);
           compressedWindInfo = '';
           WeatherData = dataStr[1].substring(44, dataStr[1].length);
-          newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
+          //newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
+
         } else {
           time = '';
           latitute = dataStr[1].substring(11, 19);
@@ -289,23 +313,27 @@ function dataSplit(data) {
           windInfo = dataStr[1].substring(30, 37);
           compressedWindInfo = '';
           WeatherData = dataStr[1].substring(37, dataStr[1].length);
-          newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
+          //newWeatherData = WeatherData.split(/[a-z]\d{4,5}\D+/);
         }
-        /*
-                        console.log("Type is ;");
-                        console.log(ObjName);
-                        console.log(time);
-                        console.log(latitute);
-                        console.log(longitude);
-                        console.log(windInfo);
-                        console.log(newWeatherData);*/
+
+        var s = WeatherData.search(/[csgtrPphbLl]\d{2,5}[^csgtrPphbLl]/);
+        //console.log("@@@@@@#######$$$$$%%%%%" + s + "!!!!!!@@@@@########")
+        var newObj = dealWithSoftIdentifier(WeatherData);
+        WeatherData = newObj.weather;
+        MachineIdentifier = newObj.machine;
+
 
         break;
       case '#':
         //  console.log("Type is #");
         rawWeatherData = dataStr[1].substring(1, dataStr[1].length);
-        var newWeatherData = rawWeatherData.split(/[a-z]\d{4,5}\D+/);
+        //     var newWeatherData = rawWeatherData.split(/[a-z]\d{4,5}\D+/);
         //     console.log(newWeatherData);
+        var s = rawWeatherData.search(/[csgtrPphbLl]\d{2,5}[^csgtrPphbLl]/);
+        //console.log("@@@@@@#######$$$$$%%%%%" + s + "!!!!!!@@@@@########")
+
+
+
         time = '';
         ObjName = '';
         latitute = '';
@@ -317,8 +345,13 @@ function dataSplit(data) {
       case '$':
         //     console.log("Type is $");
         rawWeatherData = dataStr[1].substring(1, dataStr[1].length);
-        var newWeatherData = rawWeatherData.split(/[a-z]\d{4,5}\D+/);
+        //    var newWeatherData = rawWeatherData.split(/[a-z]\d{4,5}\D+/);
         //     console.log(newWeatherData);
+        var s = rawWeatherData.search(/[csgtrPphbLl]\d{2,5}[^csgtrPphbLl]/);
+        //console.log("@@@@@@#######$$$$$%%%%%" + s + "!!!!!!@@@@@########")
+
+
+
         time = '';
         ObjName = '';
         latitute = '';
@@ -330,8 +363,12 @@ function dataSplit(data) {
       case '*':
         //     console.log("Type is *");
         rawWeatherData = dataStr[1].substring(1, dataStr[1].length);
-        var newWeatherData = rawWeatherData.split(/[a-z]\d{4,5}\D+/);
+        //     var newWeatherData = rawWeatherData.split(/[a-z]\d{4,5}\D+/);
         //     console.log(newWeatherData);
+        var s = rawWeatherData.search(/[csgtrPphbLl]\d{2,5}[^csgtrPphbLl]/);
+        //console.log("@@@@@@#######$$$$$%%%%%" + s + "!!!!!!@@@@@########")
+
+
         time = '';
         ObjName = '';
         latitute = '';
@@ -344,17 +381,21 @@ function dataSplit(data) {
         //    console.log("Type is _");
         //console.log(dataStr[1].substring(1, 9));
         var rawWeatherData = dataStr[1].substring(10, dataStr[1].length);
-        var newWeatherData = rawWeatherData.split(/[a-z]\d{4,5}\D+/);
-        //     console.log(newWeatherData);
-        time = '';
+        //var newWeatherData = rawWeatherData.split(/[a-z]\d{4,5}\D+/);
+
+        time = rawWeatherData.substring(0, 7);
         ObjName = '';
         latitute = '';
         longitude = '';
         compressedWindInfo = '';
         windInfo = '';
-        WeatherData = '';
+        WeatherData = rawWeatherData.substring(8, rawWeatherData.length);
+
+        var s = rawWeatherData.search(/[csgtrPphbLl]\d{2,5}[^csgtrPphbLl]/);
+        //console.log("@@@@@@#######$$$$$%%%%%" + s + "!!!!!!@@@@@########")
 
         //Deal with raw weather data
+
         break;
       default: //console.log(weatherType);
         time = '';
@@ -367,25 +408,6 @@ function dataSplit(data) {
         break;
     }
 
-
-
-    var i = dataStr[1].length - 1;
-
-    var dataStr1 = dataStr[1].toString();
-
-    if (dataStr1[i] >= '0' && dataStr1[i] <= '9' && dataStr1[i - 1] >= '0' && dataStr1[i] <= '9') {;
-    } else if (dataStr1[i - 3] >= '0' && dataStr1[i - 3] <= '9') {
-      SoftwareIdentifier = dataStr1[i - 2];
-      MachineIdentifier = dataStr1.substring(i - 1, i);
-    } else if (dataStr1[i - 4] >= '0' && dataStr1[i - 4] <= '9') {
-      SoftwareIdentifier = dataStr1[i - 3];
-      MachineIdentifier = dataStr1.substring(i - 2, i);
-    } else {
-      SoftwareIdentifier = dataStr1[i - 4];
-      MachineIdentifier = dataStr1.substring(i - 3, i);
-    }
-    //  console.log("*****"+SoftwareIdentifier);
-    //  console.log("*****"+MachineIdentifier);
 
 
     //Start to make up an object
@@ -417,11 +439,11 @@ function dataDecoding(DataConvertedGroup) {
   var tarData = new Object();
   tarData.Type = 0;
   // 0 - undefine ; 1 - DayHrMin(UTC/GMT) z ; 2 - DayHrMin(Local) / ; 3 HrMinSec(UTC/GMT) h ; 4 MonDayHrMin(UTC/GMT)
-  tarData.Month = "";
-  tarData.Day = "";
-  tarData.Hour = "";
-  tarData.Min = "";
-  tarData.Sec = "";
+  tarData.Month = 0;
+  tarData.Day = 0;
+  tarData.Hour = 0;
+  tarData.Min = 0;
+  tarData.Sec = 0;
 
   //Split Time
   tStr = DataConvertedGroup.TimeConverted;
@@ -431,55 +453,77 @@ function dataDecoding(DataConvertedGroup) {
     //console.log(tail);
     switch (tail) {
       case 'z':
+        tarData.Type = 1;
         tarData.Month = d.getUTCMonth() + 1;
-        tarData.Day = tStr.slice(0, 2);
-        tarData.Hour = tStr.slice(2, 4);
-        tarData.Min = tStr.slice(4, 6);
+        tarData.Day = parseInt(tStr.slice(0, 2));
+        tarData.Hour = parseInt(tStr.slice(2, 4));
+        tarData.Min = parseInt(tStr.slice(4, 6));
         break;
       case '/':
+        tarData.Type = 2;
         tarData.Month = d.getMonth() + 1;
-        tarData.Day = tStr.slice(0, 2);
-        tarData.Hour = tStr.slice(2, 4);
-        tarData.Min = tStr.slice(4, 6);
+        tarData.Day = parseInt(tStr.slice(0, 2));
+        tarData.Hour = parseInt(tStr.slice(2, 4));
+        tarData.Min = parseInt(tStr.slice(4, 6));
         break;
       case 'h':
-        tarData.Hour = tStr.slice(0, 2);
-        tarData.Min = tStr.slice(2, 4);
-        tarData.Sec = tStr.slice(4, 6);
+        tarData.Type = 3;
+        tarData.Hour = parseInt(tStr.slice(0, 2));
+        tarData.Min = parseInt(tStr.slice(2, 4));
+        tarData.Sec = parseInt(tStr.slice(4, 6));
         break;
     }
   } else if (tStr.length == 8) {
     tarData.Type = 4;
-    tarData.Month = tStr.slice(0, 2);
-    tarData.Day = tStr.slice(2, 4);
-    tarData.Hour = tStr.slice(4, 6);
-    tarData.Min = tStr.slice(6, 8);
+    tarData.Month = parseInt(tStr.slice(0, 2));
+    tarData.Day = parseInt(tStr.slice(2, 4));
+    tarData.Hour = parseInt(tStr.slice(4, 6));
+    tarData.Min = parseInt(tStr.slice(6, 8));
   } else {
-    //  console.log('Unknown Time Data');
+    //console.log('Unknown Data');
+    //console.log(tStr);
   }
 
   //Latitude
   tLat = DataConvertedGroup.latituteConverted;
   if (tLat.length == 4) {
-    y1 = (tLat.charCodeAt(0) - 33) * (91 * 91 * 91);
-    y2 = (tLat.charCodeAt(1) - 33) * (91 * 91);
-    y3 = (tLat.charCodeAt(2) - 33) * (91);
-    y4 = (tLat.charCodeAt(3) - 33) * (1);
-    tarData.Lat = 90 - (y1 + y2 + y3 + y4) / 380926;
+    //y1 = (tLat.charCodeAt(0)-33) * (91*91*91);
+    //y2 = (tLat.charCodeAt(1)-33) * (91*91);
+    //y3 = (tLat.charCodeAt(2)-33) * (91);
+    //y4 = (tLat.charCodeAt(3)-33) * (1);
+    //tarData.Lat =  90 - (y1 + y2 + y3 + y4) / 380926;.
+    tarData.Lat = decodeLat(tLat);
   } else {
-    tarData.Lat = tLat;
+    if (tLat.slice(7, 8) == 'N') {
+      correct = parseInt(tLat.slice(0, 2));
+      correct = correct + parseFloat(tLat.slice(2, 7)) / 60;
+      tarData.Lat = correct;
+    } else {
+      correct = 0 - tLat.slice(0, 2);
+      correct = correct - parseFloat(tLat.slice(2, 7)) / 60;
+      tarData.Lat = correct;
+    }
   }
 
   //Longtitude
   tLong = DataConvertedGroup.longitudeConverted;
   if (tLong.length == 4) {
-    x1 = (tLong.charCodeAt(0) - 33) * (91 * 91 * 91);
-    x2 = (tLong.charCodeAt(1) - 33) * (91 * 91);
-    x3 = (tLong.charCodeAt(2) - 33) * (91);
-    x4 = (tLong.charCodeAt(3) - 33) * (1);
-    tarData.Long = -180 + (x1 + x2 + x3 + x4) / 190463;
+    //x1 = (tLong.charCodeAt(0)-33) * (91*91*91);
+    //x2 = (tLong.charCodeAt(1)-33) * (91*91);
+    //x3 = (tLong.charCodeAt(2)-33) * (91);
+    //x4 = (tLong.charCodeAt(3)-33) * (1);
+    //tarData.Long =  -180 + (x1 + x2 + x3 + x4) / 190463;
+    tarData.Long = decodeLong(tLong);
   } else {
-    tarData.Long = tLong;
+    if (tLong.slice(8, 9) == 'E') {
+      correct = parseInt(tLong.slice(0, 3));
+      correct = correct + parseFloat(tLong.slice(3, 8)) / 60;
+      tarData.Long = correct;
+    } else {
+      correct = 0 - tLong.slice(0, 3);
+      correct = correct - parseFloat(tLong.slice(3, 8)) / 60;
+      tarData.Long = correct;
+    }
   }
 
   var res = new Object();
@@ -498,27 +542,28 @@ function dataDecoding(DataConvertedGroup) {
   else extraStr.CompWindDir_Speed = res.CompWindDir_Speed;
 
   //WindDirection
-  tarData.WindDirection = wStr.slice(wStr.indexOf('c') + 1, wStr.indexOf('c') + 4); // degrees
+  tarData.WindDirection = parseInt(wStr.slice(wStr.indexOf('c') + 1, wStr.indexOf('c') + 4)); // degrees
   if (tarData.WindDirection == "..." || tarData.WindDirection == "   ") tarData.WindDirection = 0;
   if (tarData.WindDirection == wStr.slice(0, 3)) tarData.WindDirection = 0;
-  if (extraStr.WindDir_Speed != "") tarData.WindDirection = extraStr.WindDir_Speed.slice(0, 3);
+  if (extraStr.WindDir_Speed != "") tarData.WindDirection = parseInt(extraStr.WindDir_Speed.slice(0, 3));
   if (extraStr.CompWindDir_Speed != '') {
     if (extraStr.CompWindDir_Speed.charAt(0) >= '!' && extraStr.CompWindDir_Speed.charAt(0) <= 'z') {
-      tarData.WindDirection = (extraStr.CompWindDir_Speed.charCodeAt(0) - 33) * 4;
+      //tarData.WindDirection = (extraStr.CompWindDir_Speed.charCodeAt(0) - 33) * 4;
+      tarData.WindDirection = decodeCourse(extraStr.CompWindDir_Speed.charAt(0));
     }
   }
 
   //WindSpeed
-  tarData.WindSpeed = wStr.slice(wStr.indexOf('s') + 1, wStr.indexOf('s') + 4); // mph
+  tarData.WindSpeed = parseInt(wStr.slice(wStr.indexOf('s') + 1, wStr.indexOf('s') + 4)); // mph
   if (tarData.WindSpeed == "..." || tarData.WindSpeed == "   ") tarData.WindSpeed = 0;
   if (tarData.WindSpeed == wStr.slice(0, 3)) tarData.WindSpeed = 0;
-  if (extraStr.WindDir_Speed != "") tarData.WindSpeed = extraStr.WindDir_Speed.slice(4, 7);
+  if (extraStr.WindDir_Speed != "") tarData.WindSpeed = parseInt(extraStr.WindDir_Speed.slice(4, 7));
   if (extraStr.CompWindDir_Speed != "") {
     if (extraStr.CompWindDir_Speed.charAt(0) >= '!' && extraStr.CompWindDir_Speed.charAt(0) <= 'z') {
-      pow = 1.00;
-      eFlag = extraStr.CompWindDir_Speed.charCodeAt(1) - 33;
-      for (i = 1; i <= eFlag; i++) pow = pow * 1.08;
-      tarData.WindSpeed = pow - 1;
+      //pow = 1.00;  eFlag = extraStr.CompWindDir_Speed.charCodeAt(1) - 33;
+      //for(i=1; i<= eFlag; i++) pow = pow * 1.08;
+      //tarData.WindSpeed = pow - 1;
+      tarData.WindDirection = decodeSpeed(extraStr.CompWindDir_Speed.charAt(1)) * 1.151; //knot -> mph
     }
   }
 
@@ -587,38 +632,165 @@ function dataDecoding(DataConvertedGroup) {
 
 
   //Gust
-  tarData.Gust = wStr.slice(wStr.indexOf('g') + 1, wStr.indexOf('g') + 4); // mph (peak speed in the last 5min)
+  tarData.Gust = parseInt(wStr.slice(wStr.indexOf('g') + 1, wStr.indexOf('g') + 4)); // mph (peak speed in the last 5min)
   if (tarData.Gust == "..." || tarData.Gust == "   ") tarData.Gust = 0;
   if (tarData.Gust == wStr.slice(0, 3)) tarData.Gust = 0;
   //Temp
-  tarData.Temp = wStr.slice(wStr.indexOf('t') + 1, wStr.indexOf('t') + 4); // degrees Fahrenheit
+  tarData.Temp = parseInt(wStr.slice(wStr.indexOf('t') + 1, wStr.indexOf('t') + 4)); // degrees Fahrenheit
   if (tarData.Temp == "..." || tarData.Temp == "   ") tarData.Temp = 0;
   if (tarData.Temp == wStr.slice(0, 3)) tarData.Temp = 0;
   //RainLastHr
-  tarData.RainLastHr = wStr.slice(wStr.indexOf('r') + 1, wStr.indexOf('r') + 4); // hundredths of an inch
+  tarData.RainLastHr = parseInt(wStr.slice(wStr.indexOf('r') + 1, wStr.indexOf('r') + 4)); // hundredths of an inch
   if (tarData.RainLastHr == wStr.slice(0, 3)) tarData.RainLastHr = 0;
-  if (tarData.RainLastHr == wStr.slice(0, 3)) tarData.RainLastHr = 0;
+  //if(tarData.RainLastHr == wStr.slice(0, 3)) tarData.RainLastHr = 0;
   //RainLast24Hr
-  tarData.RainLast24Hr = wStr.slice(wStr.indexOf('p') + 1, wStr.indexOf('p') + 4);
+  tarData.RainLast24Hr = parseInt(wStr.slice(wStr.indexOf('p') + 1, wStr.indexOf('p') + 4));
   if (tarData.RainLast24Hr == wStr.slice(0, 3)) tarData.RainLast24Hr = 0;
-  if (tarData.RainLast24Hr == wStr.slice(0, 3)) tarData.RainLast24Hr = 0;
+  //if(tarData.RainLast24Hr == wStr.slice(0, 3)) tarData.RainLast24Hr = 0;
   //RainSinceMid
-  tarData.RainSinceMid = wStr.slice(wStr.indexOf('P') + 1, wStr.indexOf('P') + 4);
+  tarData.RainSinceMid = parseInt(wStr.slice(wStr.indexOf('P') + 1, wStr.indexOf('P') + 4));
   if (tarData.RainSinceMid == wStr.slice(0, 3)) tarData.RainSinceMid = 0;
-  if (tarData.RainSinceMid == wStr.slice(0, 3)) tarData.RainSinceMid = 0;
+  //if(tarData.RainSinceMid == wStr.slice(0, 3)) tarData.RainSinceMid = 0;
   //Humidity
-  tarData.Humidity = wStr.slice(wStr.indexOf('h') + 1, wStr.indexOf('h') + 3); // in %.00 = 100%
+  tarData.Humidity = parseInt(wStr.slice(wStr.indexOf('h') + 1, wStr.indexOf('h') + 3)); // in %.00 = 100%
   if (tarData.Humidity == wStr.slice(0, 2)) tarData.Humidity = 0;
-  if (tarData.Humidity == wStr.slice(0, 3)) tarData.Humidity = 0;
+  //if(tarData.Humidity == wStr.slice(0, 3)) tarData.Humidity = 0;
   //Barometric
-  tarData.Barometric = wStr.slice(wStr.indexOf('b') + 1, wStr.indexOf('b') + 5);
+  tarData.Barometric = parseInt(wStr.slice(wStr.indexOf('b') + 1, wStr.indexOf('b') + 5));
   if (tarData.Barometric == wStr.slice(0, 4)) tarData.Barometric = 0;
-  if (tarData.Barometric == wStr.slice(0, 3)) tarData.Barometric = 0;
-  //wea.Luminosity = wStr.slice(wStr.indexOf('L')+1, wStr.indexOf('L')+4);          // in watts per meter^2 <= 999
+  //if(tarData.Barometric == wStr.slice(0, 3)) tarData.Barometric = 0;
+  tarData.Luminosity = parseInt(wStr.slice(wStr.indexOf('L') + 1, wStr.indexOf('L') + 4));
+  if (tarData.Luminosity == wStr.slice(0, 3)) tarData.Luminosity = 0;
+  // in watts per meter^2 <= 999
   //wea.Luminosity2 = wStr.slice(wStr.indexOf('l')+1, wStr.indexOf('l')+4);
   //wea.SnowfallLast24Hr = wStr.slice(wStr.indexOf('s')+1, wStr.indexOf('s')+4);  //in inches
   //wea.RawRainCounter = wStr.slice(wStr.indexOf('#')+1, wStr.indexOf('#')+4);
   //console.log(tarData);
-
   return tarData;
 }
+
+function decodeLat(lat) {
+  var lat_final = 90 - ((lat.charCodeAt(0) - 33) * Math.pow(91, 3) + (lat.charCodeAt(1) - 33) * Math.pow(91, 2) + (lat.charCodeAt(2) - 33) * 91 + lat.charCodeAt(3) - 33) / 380926;
+  return lat_final;
+}
+
+function decodeLong(long) {
+  var long_final = -180 + ((long.charCodeAt(0) - 33) * Math.pow(91, 3) + (long.charCodeAt(1) - 33) * Math.pow(91, 2) + (long.charCodeAt(2) - 33) * 91 + long.charCodeAt(3) - 33) / 190463;
+  return long_final;
+}
+
+function decodeCourse(c) {
+  var course_final = (c.charCode - 33) * 4;
+  return course_final;
+}
+
+function decodeSpeed(s) {
+  var speed_final = Math.pow(1.08, (s.charCode - 33)) - 1;
+  return speed_final;
+}
+
+function dealWithSoftIdentifier(WeatherData) {
+
+  var s = WeatherData.search(/[csgtrPphbLl][0123456789.]{2,5}/);
+  var WeatherDataSplit = "";
+
+  while (s != -1) {
+    //Find a weatherData
+
+
+    if (WeatherData != undefined) {
+
+      if (WeatherData.charAt(s) == 'c') {
+
+        WeatherDataSplit = WeatherDataSplit.concat(WeatherData.substr(0, 4));
+        WeatherData = WeatherData.substring(s + 4, WeatherData.length);
+
+      } else if (WeatherData.charAt(s) == 's') {
+
+        WeatherDataSplit = WeatherDataSplit.concat(WeatherData.substr(0, 4));
+        WeatherData = WeatherData.substring(s + 4, WeatherData.length);
+
+      } else if (WeatherData.charAt(s) == 'g') {
+
+        WeatherDataSplit = WeatherDataSplit.concat(WeatherData.substr(0, 4));
+        WeatherData = WeatherData.substring(s + 4, WeatherData.length);
+
+      } else if (WeatherData.charAt(s) == 't') {
+
+        WeatherDataSplit = WeatherDataSplit.concat(WeatherData.substr(0, 4));
+        WeatherData = WeatherData.substring(s + 4, WeatherData.length);
+
+      } else if (WeatherData.charAt(s) == 'r') {
+
+        WeatherDataSplit = WeatherDataSplit.concat(WeatherData.substr(0, 4));
+        WeatherData = WeatherData.substring(s + 4, WeatherData.length);
+
+      } else if (WeatherData.charAt(s) === 'P') {
+
+        WeatherDataSplit = WeatherDataSplit.concat(WeatherData.substr(0, 4));
+        WeatherData = WeatherData.substring(s + 4, WeatherData.length);
+
+      } else if (WeatherData.charAt(s) === 'p') {
+
+        WeatherDataSplit = WeatherDataSplit.concat(WeatherData.substr(0, 4));
+        WeatherData = WeatherData.substring(s + 4, WeatherData.length);
+
+      } else if (WeatherData.charAt(s) == 'h') {
+
+        WeatherDataSplit = WeatherDataSplit.concat(WeatherData.substr(0, 3));
+        WeatherData = WeatherData.substring(s + 3, WeatherData.length);
+
+      } else if (WeatherData.charAt(s) == 'b') {
+
+        if (WeatherData.charAt(s + 5) >= '0' && WeatherData.charAt(s + 5) <= '9') {
+          WeatherDataSplit = WeatherDataSplit.concat(WeatherData.substr(0, 6));
+          WeatherData = WeatherData.substring(s + 6, WeatherData.length);
+        } else {
+          WeatherDataSplit = WeatherDataSplit.concat(WeatherData.substr(0, 5));
+          WeatherData = WeatherData.substring(s + 5, WeatherData.length);
+        }
+
+      } else if (WeatherData.charAt(s) === 'L') {
+
+        WeatherDataSplit = WeatherDataSplit.concat(WeatherData.substr(0, 4));
+        WeatherData = WeatherData.substring(s + 4, WeatherData.length);
+
+      } else if (WeatherData.charAt(s) === 'l') {
+
+        WeatherDataSplit = WeatherDataSplit.concat(WeatherData.substr(0, 5));
+        WeatherData = WeatherData.substring(s + 5, WeatherData.length);
+      }
+
+    }
+
+    //Split it and form a new String
+    //WeatherData = WeatherData.split(/[csgtrPphbLl]\d{2,5}/);
+    s = WeatherData.search(/[csgtrPphbLl][0123456789.]{2,5}/);
+  }
+
+  MachineIdentifier = WeatherData;
+
+  var objectReturn = new Object;
+  objectReturn.weather = WeatherDataSplit;
+  objectReturn.machine = MachineIdentifier;
+
+  //console.log("*****" + objectReturn.weather + "*****");
+  //console.log("*****" + objectReturn.machine + "*****");
+
+  return objectReturn;
+
+}
+
+client.on('error', function(error) {
+  console.log('error' + error);
+  //client.destory();
+});
+
+client.on('close', function() {
+  console.log('Closed.\n');
+  client.end();
+});
+
+client.on('end', function() {
+  console.log('disconnected\n');
+});

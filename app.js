@@ -9,23 +9,23 @@ var port = 3000
 var weather = wdb.model('weather', {
 	Type: Number,
 	Month: Number,
-	Day: String,
-	Hour: String,
-	Min: String,
-	Sec: String,
-	Lat: String,
-	Long: String,
-	WindDirection: String,
-	WindSpeed: String,
-	AprsSoft: String,
-	WeatherUnit: String,
-	Gust: String,
-	Temp: String,
-	RainLastHr: String,
-	RainLast24Hr: String,
-	RainSinceMid: String,
-	Humidity: String,
-	Barometric: String
+	Day: Number,
+	Hour: Number,
+	Min: Number,
+	Sec: Number,
+	Lat: Number,
+	Long: Number,
+	WindDirection: Number,
+	WindSpeed: Number,
+	AprsDevice: String,
+	Gust: Number,
+	Temp: Number,
+	RainLastHr: Number,
+	RainLast24Hr: Number,
+	RainSinceMid: Number,
+	Humidity: Number,
+	Barometric: Number,
+	Luminosity: Number
 });
 
 var moving_object = odb.model('moving_object', {
@@ -59,8 +59,7 @@ app.post('/weather', function(req, res) {
 		Long: req.body.data.Long,
 		WindDirection: req.body.data.WindDirection,
 		WindSpeed: req.body.data.WindSpeed,
-		AprsSoft: req.body.data.AprsSoft,
-		WeatherUnit: req.body.data.WeatherUnit,
+		AprsDevice: req.body.data.AprsDevice,
 		Gust: req.body.data.Gust,
 		Temp: req.body.data.Temp,
 		RainLastHr: req.body.data.RainLastHr,
@@ -68,6 +67,7 @@ app.post('/weather', function(req, res) {
 		RainSinceMid: req.body.data.RainSinceMid,
 		Humidity: req.body.data.Humidity,
 		Barometric: req.body.data.Barometric
+		Luminosity: req.body.data.Luminosity
 	});
 
 	Wea.save(function(err) {
@@ -82,7 +82,7 @@ app.post('/weather', function(req, res) {
 
 
 app.post('/moving_object', function(req, res) {
-	//console.log('recieve_cnt:'+(++recieve_cnt))
+	//console.log('receive_cnt:'+(++receive_cnt))
 	//console.log(req.url);
 	var MovOb = new moving_object({
 		Source: req.body.Source,
